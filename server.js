@@ -48,23 +48,7 @@ app.get('/getAccessToken', async function (req, res) {
             return res.status(400).json({ error: data.error });
         }
 
-        const checkVaultResponse = await checkForVault(data.access_token);
-
-        if (checkVaultResponse.exists) {
-            return res.json({
-                message: 'Repository already exists.',
-                token: data.access_token,
-                repo: checkVaultResponse.repo,
-            });
-        }
-
-        const repoInitResponse = await initRepository(data.access_token);
-
-        if (repoInitResponse.error) {
-            return res.status(500).json({ error: repoInitResponse.error });
-        }
-
-        res.json({ message: 'Access token obtained and repository initialized.', repo: repoInitResponse, token: data.access_token });
+        res.json({ message: 'Access token obtained and repository initialized.', token: data.access_token });
     } catch (error) {
         console.error('Error during authorization:', error.message);
         res.status(500).json({ error: 'Failed to obtain access token.' });
@@ -220,15 +204,82 @@ app.get('/getVaultRepository', async function(req, res)  {
                 message: 'Repository found',
                 repo: checkVaultResponse.repo,
             });
-        } else {
-            return res.status(404).json({ message: 'Vault repository does not exist.' });
+        } 
+
+        const repoInitResponse = await initRepository(token);
+
+        if (repoInitResponse.error) {
+            return res.status(500).json({ error: repoInitResponse.error });
         }
+
+        res.json({ message: 'Access token obtained and repository initialized.', repo: repoInitResponse});
     } catch (error) {
         console.error('Error finding vault repository:', error.message);
         res.status(500).json({ error: 'Failed to check vault repository.', details: error.message });
     }
 })
 
+async function addFileToVault(owner, repo, path, fileContent, token) {
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+
+    const base64Content = Buffer.from(fileContent).toString("base64");
+
+    const body = JSON.stringify({
+        message: "Adding a new file via API", 
+        content: base64Content,             
+        branch: "main",                     
+    });
+
+    const response = await fetch(url, {
+        method: "PUT",
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+        },
+        body,
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`GitHub API Error: ${error.message}`);
+    }
+
+    return await response.json();
+}
+
+app.put('/addNewFileToVault', async function (req, res) {
+    const {owner,repo,name,fileContent,token} = req.query;
+    const path = `src/${name}`;
+
+    if (!token) {
+        return res.status(400).json({ error: 'Token is required.' });
+    }
+
+    if (!owner || !repo || !name || !fileContent) {
+        return res.status(400).json({ error: 'Owner, repo, file name, and file content are required.' });
+    }
+
+
+    try {
+        const data = await addFileToVault(owner, repo, path, fileContent, token);
+
+        res.status(201).json({
+            message: 'File added successfully',
+            file: {
+                name: data.content.name,
+                path: data.content.path,
+                sha: data.content.sha,
+            },
+        });
+    } catch (error) {
+        console.error('Error adding file to repository:', error.message);
+        res.status(500).json({
+            error: 'Internal server error',
+            details: error.message,
+        });
+    }
+});
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, function () {

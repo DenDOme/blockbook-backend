@@ -68,17 +68,17 @@ async function getAllFilesFromRepo(req, res, next) {
 }
 
 async function addNewFileToVault(req, res, next) {
-    const { owner, repo, path, fileContent, token } = req.query;
+    const { owner, repo, name, fileContent, token } = req.query;
 
     if (!token) {
         return res.status(400).json({ error: 'Token is required.' });
     }
 
-    if (!owner || !repo || !path || !fileContent) {
-        return res.status(400).json({ error: 'Owner, repo, file path, and file content are required.' });
+    if (!owner || !repo || !name || !fileContent) {
+        return res.status(400).json({ error: 'Owner, repo, file name, and file content are required.' });
     }
 
-    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${name}`;
     const base64Content = Buffer.from(fileContent).toString("base64");
 
     const body = JSON.stringify({
